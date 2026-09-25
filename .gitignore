@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+coverage/
+.DS_Store
+
+# Internal planning notes — not part of the submission
+/plan.md
+/Takehomeassessment.md
