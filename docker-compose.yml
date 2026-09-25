@@ -1,0 +1,12 @@
+services:
+  localstack:
+    image: localstack/localstack:3
+    container_name: flash-sale-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=dynamodb,sqs
+      - DEFAULT_REGION=us-east-1
+      - DEBUG=0
+    # No volume mounted: LocalStack state is ephemeral (reset on `docker compose down`).
+    # Acceptable for this take-home; see README for the production (real AWS) equivalent.
