@@ -24,5 +24,9 @@ export const config = {
     purchases: env.PURCHASES_TABLE ?? "Purchases",
   },
   queueName: env.PURCHASE_QUEUE_NAME ?? "flash-sale-purchases",
+  // Poison messages (e.g. a handler bug that fails every time) get redirected here after
+  // maxReceiveCount retries instead of cycling through the main queue forever.
+  deadLetterQueueName: env.PURCHASE_DLQ_NAME ?? `${env.PURCHASE_QUEUE_NAME ?? "flash-sale-purchases"}-dlq`,
+  maxReceiveCount: Number(env.PURCHASE_MAX_RECEIVE_COUNT ?? 3),
 } as const;
 

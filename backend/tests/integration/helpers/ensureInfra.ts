@@ -5,5 +5,8 @@ import { config } from "../../../src/config.js";
 export async function ensureTestInfrastructure(): Promise<void> {
   await createTableIfNotExists(config.tables.inventory);
   await createTableIfNotExists(config.tables.purchases);
-  await createQueueIfNotExists(config.queueName);
+  await createQueueIfNotExists(config.queueName, {
+    deadLetterQueueName: config.deadLetterQueueName,
+    maxReceiveCount: config.maxReceiveCount,
+  });
 }
