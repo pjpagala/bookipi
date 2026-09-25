@@ -10,7 +10,8 @@
     "reset-stock": "tsx scripts/reset-stock.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run src"
+    "test": "vitest run src",
+    "test:integration": "vitest run --config vitest.integration.config.ts tests/integration"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.687.0",
