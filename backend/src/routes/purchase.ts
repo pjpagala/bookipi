@@ -59,6 +59,10 @@ export async function purchaseRoutes(app: FastifyInstance) {
     }
 
     const saleStatus = getSaleStatus(new Date(), config.saleStart, config.saleEnd);
+    // Check "ended" before stock: sale-timing and inventory are independent concerns.
+    // Stock can still be > 0 after the sale ends (e.g. it undersold) — that user missed
+    // the window, they weren't turned away by a stock check, so NOT_PURCHASED is the
+    // correct answer even though SOLD_OUT would otherwise look plausible. See TC-D3.
     if (saleStatus === "ended") {
       return { status: "NOT_PURCHASED" };
     }

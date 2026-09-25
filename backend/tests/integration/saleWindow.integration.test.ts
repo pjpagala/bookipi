@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { uniqueUserId } from "./helpers/dynamo.js";
+import { seedStock, uniqueUserId } from "./helpers/dynamo.js";
 
 // config.ts reads SALE_START/SALE_END from process.env once at import time. To exercise
 // different sale windows without spinning up separate processes, we temporarily change
@@ -52,7 +52,10 @@ describe("sale window enforcement (integration, real LocalStack)", () => {
     }
   });
 
-  it("TC-D3: a never-purchased user is NOT_PURCHASED once the sale has ended", async () => {
+  it("TC-D3: a never-purchased user is NOT_PURCHASED once the sale has ended, even with stock remaining", async () => {
+    // Proves sale-timing and inventory are checked independently: stock > 0 must NOT be
+    // misreported as SOLD_OUT once the sale has already ended (see routes/purchase.ts).
+    await seedStock(50);
     const { app, cleanup } = await buildAppWithSaleWindow("2020-01-01T00:00:00.000Z", "2020-01-02T00:00:00.000Z");
     try {
       const res = await app.inject({ method: "GET", url: `/purchase/${uniqueUserId()}` });
