@@ -1,6 +1,8 @@
 import type { SaleStatus } from "@flash-sale/shared";
 
-// TODO: implement — should return "upcoming" | "active" | "ended" based on the sale window.
+// Active window is [saleStart, saleEnd) — inclusive start, exclusive end.
 export function getSaleStatus(now: Date, saleStart: Date, saleEnd: Date): SaleStatus {
-  return "upcoming";
+  if (now.getTime() < saleStart.getTime()) return "upcoming";
+  if (now.getTime() >= saleEnd.getTime()) return "ended";
+  return "active";
 }
