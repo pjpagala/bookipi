@@ -182,10 +182,14 @@ pnpm run test:integration   # integration tests against real LocalStack (require
 pnpm run typecheck          # full TypeScript check, including test files
 ```
 
-- **Unit tests** (10): pure `saleWindow` logic + `attemptPurchase` outcome mapping with `aws-sdk-client-mock`.
+- **Unit tests** (11): pure `saleWindow` logic + `attemptPurchase` outcome mapping (including the stored `productId`/`correlationId`) with `aws-sdk-client-mock`.
 - **Integration tests** (11, real LocalStack, isolated `*Test`-suffixed tables/queue so they never clobber your dev data): full HTTP flow, input validation, derived statuses, and dedicated concurrency races proving exactly one winner when N requests race for the same user or the last unit of stock.
 
 Full case-by-case mapping (setup/steps/expected/which test covers it) is in [TEST_CASES.md](TEST_CASES.md).
+
+## Postman collection
+
+[`postman/flash-sale.postman_collection.json`](postman/flash-sale.postman_collection.json) + [`postman/local.postman_environment.json`](postman/local.postman_environment.json) — import both into Postman (or run headlessly with `npx newman run postman/flash-sale.postman_collection.json -e postman/local.postman_environment.json`), select the "Flash Sale - Local" environment, and run. Requests are organized into folders matching [TEST_CASES.md](TEST_CASES.md)'s categories (A-E) with built-in assertions; two requests (sold-out, sale-not-active) document the manual precondition they need (exhausted stock / inactive sale window) and will fail their assertion otherwise — that's expected, not a bug.
 
 ## Stress test
 
