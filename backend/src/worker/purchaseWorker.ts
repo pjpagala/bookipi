@@ -42,7 +42,7 @@ async function processMessage(message: Message, queueUrl: string): Promise<void>
 
   const startedAt = Date.now();
   try {
-    const outcome = await attemptPurchase(userId);
+    const outcome = await attemptPurchase(userId, correlationId);
     log.info({ outcome, durationMs: Date.now() - startedAt }, "purchase transaction completed");
     // Delete on every terminal business outcome — sold-out/already-purchased are not errors.
     await sqsClient.send(new DeleteMessageCommand({ QueueUrl: queueUrl, ReceiptHandle: message.ReceiptHandle }));

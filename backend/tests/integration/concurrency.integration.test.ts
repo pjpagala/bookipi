@@ -15,7 +15,7 @@ describe("concurrency safety (integration, real LocalStack)", () => {
     await seedStock(1);
     const userIds = Array.from({ length: 10 }, () => uniqueUserId());
 
-    const outcomes = await Promise.all(userIds.map((id) => attemptPurchase(id)));
+    const outcomes = await Promise.all(userIds.map((id) => attemptPurchase(id, `corr-${id}`)));
 
     expect(outcomes.filter((o) => o === "PURCHASED")).toHaveLength(1);
     expect(outcomes.filter((o) => o === "SOLD_OUT")).toHaveLength(9);
@@ -25,7 +25,9 @@ describe("concurrency safety (integration, real LocalStack)", () => {
     await seedStock(20);
     const userId = uniqueUserId();
 
-    const outcomes = await Promise.all(Array.from({ length: 10 }, () => attemptPurchase(userId)));
+    const outcomes = await Promise.all(
+      Array.from({ length: 10 }, (_, i) => attemptPurchase(userId, `corr-${i}`))
+    );
 
     expect(outcomes.filter((o) => o === "PURCHASED")).toHaveLength(1);
     expect(outcomes.filter((o) => o === "ALREADY_PURCHASED")).toHaveLength(9);

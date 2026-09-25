@@ -6,8 +6,11 @@ import { config } from "../config.js";
 export type PurchaseOutcome = "PURCHASED" | "SOLD_OUT" | "ALREADY_PURCHASED";
 
 // Atomically decrements stock and records the purchase in a single DynamoDB transaction —
-// this is the sole source of concurrency safety (no app-level locks).
-export async function attemptPurchase(userId: string): Promise<PurchaseOutcome> {
+// this is the sole source of concurrency safety (no app-level locks). Idempotent under
+// SQS's at-least-once delivery: if a message is redelivered after the transaction already
+// succeeded (e.g. the worker crashed before deleting it), the conditional Put simply fails
+// again and this resolves to ALREADY_PURCHASED rather than double-decrementing stock.
+export async function attemptPurchase(userId: string, correlationId: string): Promise<PurchaseOutcome> {
   const purchasedAt = new Date().toISOString();
   try {
     await ddbDocClient.send(
@@ -25,7 +28,9 @@ export async function attemptPurchase(userId: string): Promise<PurchaseOutcome> 
           {
             Put: {
               TableName: config.tables.purchases,
-              Item: { pk: userId, purchasedAt },
+              // productId is hardcoded for now (single-product system per the assessment
+              // scope) — the natural extension point if this ever supports multiple products.
+              Item: { pk: userId, productId: "PRODUCT", correlationId, purchasedAt },
               ConditionExpression: "attribute_not_exists(pk)",
             },
           },
