@@ -1,0 +1,28 @@
+{
+  "name": "@flash-sale/backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "worker": "tsx watch src/worker/purchaseWorker.ts",
+    "setup:aws": "tsx scripts/setup-aws.ts",
+    "reset-stock": "tsx scripts/reset-stock.ts",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.687.0",
+    "@aws-sdk/client-sqs": "^3.687.0",
+    "@aws-sdk/lib-dynamodb": "^3.687.0",
+    "@flash-sale/shared": "workspace:*",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.1.0",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
+
