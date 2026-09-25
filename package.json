@@ -6,6 +6,9 @@
     "node": ">=24.0.0"
   },
   "packageManager": "pnpm@12.6.0",
+  "scripts": {
+    "build": "pnpm --filter @flash-sale/shared build"
+  },
   "devDependencies": {
     "typescript": "^5.6.3"
   }
