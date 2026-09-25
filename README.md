@@ -17,11 +17,12 @@ flowchart LR
     end
 
     Queue[["SQS Standard Queue<br/>(LocalStack)"]]
+    DLQ[["Dead Letter Queue<br/>(after 3 failed receives)"]]
     Worker["Purchase Worker<br/>(long-polls the queue)"]
 
     subgraph DB["DynamoDB (LocalStack)"]
         Inventory[("Inventory table<br/>pk=PRODUCT, stock")]
-        Purchases[("Purchases table<br/>pk=userId")]
+        Purchases[("Purchases table<br/>pk=userId, productId,<br/>correlationId, purchasedAt")]
     end
 
     User -->|"buy now"| Purchase
@@ -34,6 +35,7 @@ flowchart LR
     Queue -->|"ReceiveMessage"| Worker
     Worker -->|"TransactWriteItems:<br/>decrement stock + put purchase"| DB
     Worker -->|"DeleteMessage on terminal outcome"| Queue
+    Queue -.->|"maxReceiveCount exceeded"| DLQ
 
     SaleStatus -->|"read stock"| Inventory
     CheckStatus -->|"read purchase row"| Purchases
@@ -42,7 +44,7 @@ flowchart LR
 
 **Flow:**
 1. `POST /purchase` validates the sale window is `active`, then enqueues a message and immediately returns `202 { status: "pending" }` — it never talks to DynamoDB directly.
-2. A separate **worker** process long-polls SQS and, for each message, runs a single DynamoDB `TransactWriteItems` call that atomically (a) decrements `stock` only if `stock > 0`, and (b) creates a purchase record only if the user doesn't already have one.
+2. A separate **worker** process long-polls SQS and, for each message, runs a single DynamoDB `TransactWriteItems` call that atomically (a) decrements `stock` only if `stock > 0`, and (b) creates a purchase record only if the user doesn't already have one. A message that keeps failing (not a business rejection — an actual error) is redirected to a **dead-letter queue** after 3 failed receives instead of retrying forever (see [Dead-letter queue](#dead-letter-queue-for-poison-messages) below).
 3. `GET /purchase/:userId` derives the user's status by reading DynamoDB directly (no queue involved) — see [Design choices](#design-choices--trade-offs) for how `PENDING` / `SOLD_OUT` / `PURCHASED` / `NOT_PURCHASED` are derived without a 3rd table.
 
 ## Design choices & trade-offs
@@ -65,6 +67,21 @@ The transaction above is already safe without a queue. The queue's job is purely
 
 We use **Standard** (not FIFO) SQS. FIFO exists to prevent duplicate/out-of-order processing, but our DynamoDB transaction is already safe against duplicate or concurrent delivery of the same logical purchase — the conditional `Put` simply fails the second time. Standard queues have no such ordering constraint and a materially higher throughput ceiling, so there's no reason to pay FIFO's cost here.
 
+### Idempotency under SQS's at-least-once delivery
+
+SQS Standard guarantees **at-least-once** delivery — a message can be redelivered, most notably if a worker crashes *after* the DynamoDB transaction succeeds but *before* it calls `DeleteMessage`:
+
+```
+Message received -> transaction succeeds -> worker crashes before DeleteMessage
+  -> SQS visibility timeout expires -> message redelivered -> attemptPurchase() runs again
+```
+
+This is safe by construction, not by luck: the second attempt hits the exact same `ConditionExpression: attribute_not_exists(pk)` on the `Purchases` table, which now fails because the row already exists from the first attempt. `attemptPurchase()` resolves this to `ALREADY_PURCHASED` — a normal terminal outcome, not an error — and the worker deletes the (now-processed-twice) message. Stock is never double-decremented because the `Update` on `Inventory` is part of the *same* atomic transaction as the `Put`; if the `Put` fails, the whole transaction (including the decrement) rolls back. No dedup table, no idempotency key, no FIFO message-group needed — the same conditional write that enforces "one purchase per user" also makes redelivery safe for free.
+
+### Dead-letter queue for poison messages
+
+The main queue has a `RedrivePolicy` (`maxReceiveCount: 3`, see [`backend/src/config.ts`](backend/src/config.ts) and [`backend/src/aws/provision.ts`](backend/src/aws/provision.ts)) pointing at a dedicated DLQ. Business rejections (`SOLD_OUT`, `ALREADY_PURCHASED`) are terminal outcomes and always get deleted immediately — they never count against this limit. Only messages that repeatedly throw an *unexpected* error (a real bug, a persistent DynamoDB outage, a malformed body) get redirected to the DLQ after 3 failed attempts, instead of cycling through the main queue forever and slowing down real traffic.
+
 ### Why the purchase endpoint is asynchronous (202 + poll)
 
 `POST /purchase` doesn't wait for the worker — it returns `202 { status: "pending" }` immediately, and the client polls `GET /purchase/:userId` for the outcome. This is what makes the queue's burst-absorption actually visible to the client (a synchronous design would just move the queueing delay into the HTTP request itself), and it reuses the *already-required* "check my purchase result" endpoint as the polling target instead of inventing a second mechanism.
@@ -80,7 +97,9 @@ We only write a `Purchases` row on **success**. So a missing row plus the curren
 | no | no | yes | `SOLD_OUT` |
 | no | no | no | `PENDING` |
 
-This avoids tracking every failed attempt just to answer "did I get one?".
+This avoids tracking every failed attempt just to answer "did I get one?". Note the `Sale ended?` check runs *before* the stock check in code — sale-timing and inventory are independent concerns, so stock remaining > 0 after the sale ends (e.g. it undersold) correctly reports `NOT_PURCHASED`, not a misleading `SOLD_OUT` (see the comment in [`backend/src/routes/purchase.ts`](backend/src/routes/purchase.ts) and test `TC-D3`).
+
+Each `Purchases` row also stores `productId` (hardcoded `"PRODUCT"` — the extension point if this ever supports multiple products) and the `correlationId` of the winning attempt, so a purchase can be traced straight back to its log lines without depending on log retention.
 
 ### Frontend UX: check-before-buy
 
